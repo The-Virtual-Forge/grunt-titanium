@@ -53,6 +53,12 @@ Default value: `false`
 
 If set to `true`, grunt-titanium will use your globally installed version of titanium to execute the commands. If `false` (default), it will use the version of titanium included with grunt-titanium's dependencies.
 
+#### options.useAppc
+Type: `Boolean`
+Default value: `false`
+
+Forces grunt-titanium to execute Ti commands thru the appc CLI tool. appc needs to be installed globally to work.
+
 #### options.args
 Type: `Array`,
 Default value: `[]`

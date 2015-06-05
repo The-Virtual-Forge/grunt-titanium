@@ -15,7 +15,9 @@ var _ = require('lodash'),
 	fs = require('fs-extra'),
 	path = require('path'),
 	readdir = require('recursive-readdir'),
-	spawn = child_process.spawn;
+	spawn = child_process.spawn,
+	useAppc = false,
+	preferGlobal = false;
 
 // global flags for titanium cli
 var GLOBAL_FLAGS = {
@@ -145,7 +147,6 @@ module.exports = function(grunt) {
 	}
 
 	function executeTitanium() {
-
 		var command = this.options().command || 'build',
 			done = this.async(),
 			extraArgs = [],
@@ -179,6 +180,9 @@ module.exports = function(grunt) {
 				break;
 		}
 
+		useAppc = options.useAppc || false;
+		preferGlobal = options.preferGlobal || false;
+
 		// ensure login and execute the command
 		async.series([
 			ensureLogin,
@@ -206,6 +210,7 @@ module.exports = function(grunt) {
 		delete options.failure;
 		delete options.preferGlobal;
 		delete options.success;
+		delete options.useAppc;
 
 		// must have output to satisfy success/failure conditions
 		if (srcSuccess || srcFailure) {
@@ -246,14 +251,19 @@ module.exports = function(grunt) {
 		});
 		args.unshift(command);
 
+		if (useAppc) {
+			args = ['ti'].concat(args);
+		}
+
 		// add non-option, non-flag arguments
 		args = args.concat(extraArgs);
 
 		// spawn command and output
-		grunt.log.writeln('titanium ' + args.join(' '));
+		grunt.log.writeln((useAppc ? "appc ":"")+'ti ' + args.join(' '));
 		var tiOpts = process.env.GRUNT_TITANIUM_TEST || success || failure ?
-				{} : {stdio: 'inherit'},
-			ti = spawn(getTitaniumPath(preferGlobal), args, tiOpts);
+				{} : {stdio: 'inherit'}, ti;
+
+		ti = spawn(getTitaniumPath(), args, tiOpts);
 
 		// prepare functions for killing this process
 		function killer(data) {
@@ -278,11 +288,7 @@ module.exports = function(grunt) {
 		// handle titanium's exit
 		ti.on('close', function(code) {
 			if (command !== 'build' || options.buildOnly) {
-				if (code) {
-					grunt.fail.fatal('titanium ' + command + ' failed.');
-				} else {
-					grunt.log.ok('titanium ' + command + ' complete.');
-				}
+				grunt.log[code ? 'error' : 'ok']('titanium ' + command + ' ' + (code ? 'failed' : 'complete') + '.');
 			}
 			return callback(ti.killed ? null : code);
 		});
@@ -300,7 +306,7 @@ module.exports = function(grunt) {
 
 	// ensure appc user is logged in
 	function ensureLogin(callback) {
-		exec('"' + getTitaniumPath() + '" status -o json', function(err, stdout, stderr) {
+		exec(getTitaniumPath() + (useAppc?" ti":"") + ' status -o json', function(err, stdout, stderr) {
 			if (err) { return callback(err); }
 			if (!JSON.parse(stdout).loggedIn) {
 				grunt.fail.fatal([
@@ -313,14 +319,20 @@ module.exports = function(grunt) {
 
 };
 
-function getTitaniumPath(preferGlobal) {
-	if (preferGlobal) {
-		return 'titanium';
+function getTitaniumPath() {
+	var _path;
+
+	if (useAppc) {
+		_path = 'appc';
+	} else if (preferGlobal) {
+		_path = 'titanium';
 	} else {
-		return process.env.GRUNT_TITANIUM_TEST ?
+		_path = process.env.GRUNT_TITANIUM_TEST ?
 			path.resolve('node_modules', '.bin', 'titanium') :
 			path.resolve('node_modules', 'grunt-titanium', 'node_modules', '.bin', 'titanium');
 	}
+
+	return _path;
 }
 
 function copyToApp(src, dest, callback) {
