@@ -90,6 +90,9 @@ module.exports = function(grunt) {
 				noPrompt: true
 			}, opts.build);
 
+		useAppc = opts.useAppc || false;
+		preferGlobal = opts.preferGlobal || false;
+
 		// ensure login, create app, build/run app
 		async.series([
 			ensureLogin,
@@ -259,9 +262,11 @@ module.exports = function(grunt) {
 		args = args.concat(extraArgs);
 
 		// spawn command and output
-		grunt.log.writeln((useAppc ? "appc ":"")+'ti ' + args.join(' '));
+		grunt.log.writeln(getTitaniumPath() +" "+ args.join(' '));
 		var tiOpts = process.env.GRUNT_TITANIUM_TEST || success || failure ?
 				{} : {stdio: 'inherit'}, ti;
+
+		console.log("args = "+args);
 
 		ti = spawn(getTitaniumPath(), args, tiOpts);
 
@@ -306,11 +311,14 @@ module.exports = function(grunt) {
 
 	// ensure appc user is logged in
 	function ensureLogin(callback) {
-		exec(getTitaniumPath() + (useAppc?" ti":"") + ' status -o json', function(err, stdout, stderr) {
+		var tiPath = getTitaniumPath();
+		var cmd = useAppc ? "appc whoami -o json" : getTitaniumPath()+" status -o json";
+		exec(cmd, function(err, stdout, stderr) {
 			if (err) { return callback(err); }
-			if (!JSON.parse(stdout).loggedIn) {
+			var stdoutJson = JSON.parse(stdout);
+			if (useAppc && ! stdoutJson.hasOwnProperty("username") || ! useAppc && ! stdoutJson.loggedIn) {
 				grunt.fail.fatal([
-					'You must be logged in to use grunt-titanium. Use `titanium login`.'
+					'You must be logged in to use grunt-titanium. Use `titanium (or appc ti) login`.'
 				]);
 			}
 			return callback();
